@@ -54,8 +54,28 @@ public class WikiCrawler {
 	 * @throws IOException
 	 */
 	public String crawl(boolean testing) throws IOException {
-        // FILL THIS IN!
-		return null;
+		String url = "";
+		while(url.equals("")){
+	        if (queue.isEmpty()) {
+	            return null;
+	        }
+	        url = queue.poll();
+		}
+        System.out.println("Crawling " + url);
+        if (testing==false && index.isIndexed(url)) {
+            System.out.println("Already indexed.");
+            return null;
+        }
+ 
+        Elements paragraphs;
+        if (testing) {
+            paragraphs = wf.readWikipedia(url);
+        } else {
+            paragraphs = wf.fetchWikipedia(url);
+        }
+        index.indexPage(url, paragraphs);
+        queueInternalLinks(paragraphs);
+        return url;
 	}
 	
 	/**
@@ -64,15 +84,27 @@ public class WikiCrawler {
 	 * @param paragraphs
 	 */
 	// NOTE: absence of access level modifier means package-level
-	void queueInternalLinks(Elements paragraphs) {
-        // FILL THIS IN!
-	}
+    void queueInternalLinks(Elements paragraphs) {
+        for (Element paragraph: paragraphs) {
+            queueInternalLinks(paragraph);
+        }
+    }
+ 
+    private void queueInternalLinks(Element paragraph) {
+        Elements elts = paragraph.select("a");
+        for (Element elt: elts) {
+            String relURL = elt.attr("href");
+            if (relURL.startsWith("/wiki/")) {
+                queue.add("https://en.wikipedia.org" + relURL);
+            }
+        }
+    }
 
 	public static void main(String[] args) throws IOException {
 		
 		// make a WikiCrawler
 		Jedis jedis = JedisMaker.make();
-		JedisIndex index = new JedisIndex(jedis); 
+		JedisIndex index = new JedisIndex(jedis);
 		String source = "https://en.wikipedia.org/wiki/Java_(programming_language)";
 		WikiCrawler wc = new WikiCrawler(source, index);
 		
@@ -84,9 +116,6 @@ public class WikiCrawler {
 		String res;
 		do {
 			res = wc.crawl(false);
-
-            // REMOVE THIS BREAK STATEMENT WHEN crawl() IS WORKING
-            break;
 		} while (res == null);
 		
 		Map<String, Integer> map = index.getCounts("the");
